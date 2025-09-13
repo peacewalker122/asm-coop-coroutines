@@ -3,21 +3,51 @@ global ctx_switch
 global context_trampoline
 section .text
 
-; For now, just return immediately
+; rdi = from, rsi = to  (to unused in save-only)
 ctx_switch:
-    ; store the from context
-    mov rbx, [rdi]  ; rdi points to the from context
-    mov rbp, [rdi + 8]  ; rdi points to the from context
-    mov r12, [rdi + 16] ; rdi points to the from context
-    mov r13, [rdi + 24] ; rdi points to the from context
-    mov r14, [rdi + 32] ; rdi points to the from context
-    mov r15, [rdi + 40] ; rdi points to the from context
-    mov rsp, [rdi + 48] ; rdi points to the from context
+    ; SAVE current CPU state into *from
+    mov     [rdi+0],  rbx
+    mov     [rdi+8],  rbp
+    mov     [rdi+16], r12
+    mov     [rdi+24], r13
+    mov     [rdi+32], r14
+    mov     [rdi+40], r15
 
-    mov rip, [rsp]
+    mov     [rdi+48], rsp          ; save current stack pointer
+    mov     rax, [rsp]             ; caller's return address = saved RIP
+    mov     [rdi+56], rax          ; save return address
 
-    ret
+    mov   rbx, [rsi+0]             ; load new CPU state from *to
+    mov   rbp, [rsi+8]
+    mov   r12, [rsi+16]
+    mov   r13, [rsi+24]
+    mov   r14, [rsi+32]
+    mov   r15, [rsi+40]
+    mov   rsp, [rsi+48]            ; restore new stack pointer
+    mov   rax, [rsi+56]            ; restore return address
+    
+    mov   rdi, rsi       ; set rdi to point to the target context for trampoline
+    jmp   rax ; jump to the return address, effectively switching context
 
-; We won’t actually run this yet; it’s just to satisfy the linker
+; this function below expect the rdi register to point to a context structure
 context_trampoline:
-    ret
+    mov r10, [rdi + 64] ; load the function pointer from the context (fn)
+    mov r11, [rdi + 72] ; load the function arguments from the context (arg)
+    mov r12, [rdi + 80] ; load return_ctx from the context
+    
+    mov rdi, r11        ; move the first argument into rdi
+
+    call r10 ; call the function
+    
+    ; After function returns, switch back to return context or exit
+    cmp r12, 0
+    je .exit ; if return_ctx is NULL, exit
+    
+    ; Switch back to return context
+    mov rdi, r12        ; from = return_ctx
+    mov rsi, r12        ; to = return_ctx (dummy)
+.exit:
+    ; Exit cleanly if no return context
+    mov rax, 60         ; sys_exit system call
+    mov rdi, 0          ; exit status 0
+    syscall
