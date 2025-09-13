@@ -1,5 +1,6 @@
 #include "context.h"
 #include <stdio.h>
+#include <threads.h>
 
 // Declare the helper from helper.c
 void context_make(Context *ctx, void *stack_base, size_t stack_size,
@@ -7,24 +8,26 @@ void context_make(Context *ctx, void *stack_base, size_t stack_size,
 
 static Context main_ctx;
 static Context coro_ctx;
+static Context coro2_ctx;
 static unsigned char coro_stack[8 * 1024];
 static void yield(Context *from, Context *to) { ctx_switch(from, to); }
 
 // Dummy entry for now
 static void start_fn(void *p) {
   // print the value passed to the coroutine
-
   printf("[coro] started with arg: %s\n", (char *)p);
 
-  // Yield back to main context - this should cause return to main
-  yield(&coro_ctx, &main_ctx);
+  // sleep for few seconds
+  for (int i = 0; i < 3; i++) {
+    puts("[coro] running");
+    // simulate doing some work
+    thrd_sleep(&(struct timespec){.tv_sec = 1}, NULL);
+  }
 
-  printf("[coro] resumed after first yield\n");
+  puts("[coro] to main");
 
-  // Yield again
-  yield(&coro_ctx, &main_ctx);
-
-  printf("[coro] resumed after second yield\n");
+  // TODO: the goals is to return to main_ctx without have to expliclity yield
+  // it
 
   yield(&coro_ctx, &main_ctx);
 }
@@ -32,11 +35,16 @@ static void start_fn(void *p) {
 // NOTE:
 // Current approach weren't made the coro-ctx being child of main-ctx, so the
 // program could quit using coro-ctx without returning to main-ctx
+//
+// so yield here act as a program to switch between context, from a ctx to
+// another ctx.
 
 int main(void) {
   main_ctx = (Context){0}; // Initialize main context
   context_make(&coro_ctx, coro_stack, sizeof(coro_stack), start_fn,
                (void *)"This give me a worst nightmare");
+  context_make(&coro2_ctx, coro_stack, sizeof(coro_stack), start_fn,
+               (void *)"This give me a worst nightmare 2");
 
   // check the rsp is it aligned to 16 bytes
   if (coro_ctx.rsp % 16 != 0) {
@@ -50,10 +58,11 @@ int main(void) {
 
   puts("[main] to coro");
   yield(&main_ctx, &coro_ctx);
-  puts("[main] back 1");
-  yield(&main_ctx, &coro_ctx);
-  puts("[main] back 2");
-  yield(&main_ctx, &coro_ctx);
+  puts("[main] back from coro");
+
+  puts("[main] to coro2");
+  yield(&main_ctx, &coro2_ctx);
+  puts("[main] back from coro2");
 
   puts("[main] done");
 }

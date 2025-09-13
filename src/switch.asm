@@ -42,10 +42,10 @@ context_trampoline:
     ; After function returns, switch back to return context or exit
     cmp r12, 0
     je .exit ; if return_ctx is NULL, exit
-    
-    ; Switch back to return context
-    mov rdi, r12        ; from = return_ctx
-    mov rsi, r12        ; to = return_ctx (dummy)
+
+    mov rsi, r12        ; set rsi to return_ctx
+    mov rdi, rdi        ; from is current context (already in rdi)
+    call ctx_switch     ; switch back to return context
 .exit:
     ; Exit cleanly if no return context
     mov rax, 60         ; sys_exit system call
