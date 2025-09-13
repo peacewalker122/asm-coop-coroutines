@@ -19,9 +19,9 @@ void context_make(Context *ctx, void *stack_base, size_t stack_size,
   // 3) Align down to 16 bytes (SysV ABI requires 16B alignment before a call)
   top = align_down_16(top);
 
-  // 4) Fill the context
   ctx->rsp = top;                           // where pushes/calls will write
   ctx->rip = (uintptr_t)context_trampoline; // first jump goes to trampoline
   ctx->fn = fn;                             // entry function for first run
   ctx->arg = arg;                           // argument for first run
+  ctx->return_ctx = NULL;                   // no return context initially
 }

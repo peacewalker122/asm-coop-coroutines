@@ -1,36 +1,34 @@
-# Dynamic Makefile for learning assembly from C code
-# Automatically handles all C files in src/
+# Makefile template for C + Assembly project
+# Edit SRC_C, SRC_ASM, and TARGET as needed
 
 CC = gcc
+AS = nasm
 CFLAGS = -Wall -g
-SRC_DIR = src
-SRC = $(wildcard $(SRC_DIR)/*.c)
-BINS = $(patsubst $(SRC_DIR)/%.c,%,$(SRC))
-ASMS = $(patsubst $(SRC_DIR)/%.c,%.s,$(SRC))
+ASFLAGS = -f elf64
 
-.PHONY: all asm run clean disasm
+SRC_C := $(wildcard src/*.c)
+SRC_ASM := $(wildcard src/*.asm)
+OBJ_C := $(SRC_C:.c=.o)
+OBJ_ASM := $(SRC_ASM:.asm=.o)
+OBJ := $(OBJ_C) $(OBJ_ASM)
 
-all: $(BINS)
+TARGET := main
 
-%: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -o $@ $<
+.PHONY: all clean
 
-asm: $(ASMS)
+all: $(TARGET)
 
-%.s: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -S -o $@ $<
+$(OBJ_C): %.o : %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-run: all
-	@echo "Available executables: $(BINS)"
-	@for bin in $(BINS); do \
-		if [ -x $$bin ]; then echo "Running $$bin:"; ./$$bin; fi; \
-	done
+$(OBJ_ASM): %.o : %.asm
+	$(AS) $(ASFLAGS) $< -o $@
 
-disasm: all
-	@for bin in $(BINS); do \
-		if [ -x $$bin ]; then echo "Disassembly of $$bin:"; objdump -d $$bin | less; fi; \
-	done
+$(TARGET): $(OBJ)
+	$(CC) $(OBJ) -o $@
 
 clean:
-	rm -f $(BINS) $(ASMS)
+	rm -f $(OBJ) $(TARGET)
+
+# End of Makefile
 
