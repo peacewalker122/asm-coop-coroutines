@@ -1,25 +1,32 @@
-#include "context.h"
+#include "../include/context.h"
+#include "../include/helper.h"
 #include <stdio.h>
 #include <threads.h>
 
-// Declare the helper from helper.c
-void context_make(Context *ctx, void *stack_base, size_t stack_size,
-                  coro_func_t fn, void *arg);
-
 static Context main_ctx;
 static Context coro_ctx;
-static Context coro2_ctx;
 static unsigned char coro_stack[8 * 1024];
 static void yield(Context *from, Context *to) { ctx_switch(from, to); }
 
+// NOTE: For creating new function thats abstract the context switch, there's
+// some little things that could be noted.
+// 1. The function should generate a new stack frame, so it should be marked as
+// noinline
+// 2. The function should be marked as noreturn, so the compiler won't expect it
+
 // Dummy entry for now
-static void start_fn(void *p) {
+void start_fn(void *p) {
+  // made new context_make
+  Context fn_coro_ctx = {0};
+  context_make(&fn_coro_ctx, coro_stack, sizeof(coro_stack), start_fn,
+               (void *)"This give me a worst nightmare 2");
+
   // print the value passed to the coroutine
   printf("[coro] started with arg: %s\n", (char *)p);
 
   // sleep for few seconds
   for (int i = 0; i < 3; i++) {
-    puts("[coro] running");
+    printf("[coro] running with arg: %s\n", (char *)p);
     // simulate doing some work
     thrd_sleep(&(struct timespec){.tv_sec = 1}, NULL);
   }
@@ -29,40 +36,35 @@ static void start_fn(void *p) {
   // TODO: the goals is to return to main_ctx without have to expliclity yield
   // it
 
-  yield(&coro_ctx, &main_ctx);
+  yield(&fn_coro_ctx, &main_ctx);
 }
 
-// NOTE:
-// Current approach weren't made the coro-ctx being child of main-ctx, so the
-// program could quit using coro-ctx without returning to main-ctx
+/*
+ * NOTE:
+ Current approach weren't made the coro-ctx being child of main-ctx, so the
+ program could quit using coro-ctx without returning to main-ctx
+ * 1 Create new event loop to manage coroutine lifecycle
+ * 2. Entrypoint for coroutine were an queue of function to be executed
+ * 3. Coroutine could yield to main-ctx, and main-ctx could yield to
+ */
+
 //
 // so yield here act as a program to switch between context, from a ctx to
 // another ctx.
 
 int main(void) {
   main_ctx = (Context){0}; // Initialize main context
+
+  // Create coroutine context
+  Context coro_ctx = {0};
   context_make(&coro_ctx, coro_stack, sizeof(coro_stack), start_fn,
-               (void *)"This give me a worst nightmare");
-  context_make(&coro2_ctx, coro_stack, sizeof(coro_stack), start_fn,
-               (void *)"This give me a worst nightmare 2");
+               (void *)"Hello from coroutine!");
 
-  // check the rsp is it aligned to 16 bytes
-  if (coro_ctx.rsp % 16 != 0) {
-    puts("Stack pointer is not aligned to 16 bytes!");
-    return 1;
-  }
-
-  // check the function pointer and argument are set
-  printf("Function pointer: %p\n", (void *)coro_ctx.fn);
-  printf("Argument: %p\n", coro_ctx.arg);
-
-  puts("[main] to coro");
+  puts("[main] starting coroutine");
   yield(&main_ctx, &coro_ctx);
-  puts("[main] back from coro");
 
-  puts("[main] to coro2");
-  yield(&main_ctx, &coro2_ctx);
-  puts("[main] back from coro2");
-
+  puts("[main] back from coroutine");
   puts("[main] done");
+
+  return 0;
 }

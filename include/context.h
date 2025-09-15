@@ -1,4 +1,9 @@
+#ifndef CONTEXT_H
+#define CONTEXT_H
+
+#include <stddef.h>
 #include <stdint.h>
+
 typedef void (*coro_func_t)(void *);
 
 typedef struct Context {
@@ -17,7 +22,9 @@ typedef struct Context {
   struct Context *return_ctx; // context to return to when coroutine finishes 80
 } Context;
 
-// Implemented in assembly (we’ll wire these later)
+// Implemented in assembly (we'll wire these later)
 void ctx_switch(Context *from, Context *to);
 void context_trampoline(void);
 void coroutine_exit(void);
+
+#endif

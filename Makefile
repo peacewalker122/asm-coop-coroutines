@@ -1,5 +1,6 @@
 # Makefile template for C + Assembly project
 # Edit SRC_C, SRC_ASM, and TARGET as needed
+# Any new .c file in src/, e.g., queue.c, will be included automatically.
 
 CC = gcc
 AS = nasm
