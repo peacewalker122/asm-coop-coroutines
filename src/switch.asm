@@ -27,24 +27,25 @@ ctx_switch:
     mov   rax, [rsi+56]            ; restore return address
     
     mov   rdi, rsi       ; set rdi to point to the target context for trampoline
-    jmp   rax ; jump to the return address, effectively switching context
+    jmp rax
 
 ; this function below expect the rdi register to point to a context structure
 context_trampoline:
-    mov r10, [rdi + 64] ; load the function pointer from the context (fn)
-    mov r11, [rdi + 72] ; load the function arguments from the context (arg)
-    mov r12, [rdi + 80] ; load return_ctx from the context
+    mov r13, rdi
+
+    mov r10, [r13 + 64] ; load the function pointer from the context (fn)
+    mov r11, [r13 + 72] ; load the function arguments from the context (arg)
+    mov r12, [r13 + 80] ; load return_ctx from the context
     
     mov rdi, r11        ; move the first argument into rdi
-
     call r10 ; call the function
     
     ; After function returns, switch back to return context or exit
-    cmp r12, 0
+    test r12, r12
     je .exit ; if return_ctx is NULL, exit
 
     mov rsi, r12        ; set rsi to return_ctx
-    mov rdi, rdi        ; from is current context (already in rdi)
+    mov rdi, r13        ; from is current context (already in rdi)
     call ctx_switch     ; switch back to return context
 .exit:
     ; Exit cleanly if no return context

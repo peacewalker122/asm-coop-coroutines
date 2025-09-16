@@ -1,26 +1,9 @@
-#include "../include/context.h"
-#include "../include/helper.h"
+#include "../include/coroutine.h"
 #include <stdio.h>
 #include <threads.h>
 
-static Context main_ctx;
-static Context coro_ctx;
-static unsigned char coro_stack[8 * 1024];
-static void yield(Context *from, Context *to) { ctx_switch(from, to); }
-
-// NOTE: For creating new function thats abstract the context switch, there's
-// some little things that could be noted.
-// 1. The function should generate a new stack frame, so it should be marked as
-// noinline
-// 2. The function should be marked as noreturn, so the compiler won't expect it
-
 // Dummy entry for now
 void start_fn(void *p) {
-  // made new context_make
-  Context fn_coro_ctx = {0};
-  context_make(&fn_coro_ctx, coro_stack, sizeof(coro_stack), start_fn,
-               (void *)"This give me a worst nightmare 2");
-
   // print the value passed to the coroutine
   printf("[coro] started with arg: %s\n", (char *)p);
 
@@ -32,36 +15,50 @@ void start_fn(void *p) {
   }
 
   puts("[coro] to main");
-
-  // TODO: the goals is to return to main_ctx without have to expliclity yield
-  // it
-
-  yield(&fn_coro_ctx, &main_ctx);
 }
 
-/*
- * NOTE:
- Current approach weren't made the coro-ctx being child of main-ctx, so the
- program could quit using coro-ctx without returning to main-ctx
- * 1 Create new event loop to manage coroutine lifecycle
- * 2. Entrypoint for coroutine were an queue of function to be executed
- * 3. Coroutine could yield to main-ctx, and main-ctx could yield to
- */
+void second_fn(void *p) {
+  // reading file and print its content
+  char *arg = (char *)p;
+  printf("[coro2] trying to access file: %s\n", arg);
 
-//
-// so yield here act as a program to switch between context, from a ctx to
-// another ctx.
+  FILE *file = fopen(arg, "r");
+  if (file == NULL) {
+    perror("Failed to open file");
+    return;
+  }
+
+  char buffer[256];
+  while (fgets(buffer, sizeof(buffer), file)) {
+    printf("[coro2] read line: %s", buffer);
+  }
+  fclose(file);
+
+  printf("[coro2] finished reading file: %s\n", (char *)p);
+  puts("[coro2] to main");
+}
 
 int main(void) {
-  main_ctx = (Context){0}; // Initialize main context
+  if (co_init() != 0) {
+    fprintf(stderr, "Failed to initialize coroutine system\n");
+    return 1;
+  }
 
-  // Create coroutine context
-  Context coro_ctx = {0};
-  context_make(&coro_ctx, coro_stack, sizeof(coro_stack), start_fn,
-               (void *)"Hello from coroutine!");
+  co_t *coroutine1 =
+      co_spawn(start_fn, "Jokowi, baik hati dan bijaksana, senang membantu "
+                         "rakyatnya. Ucap seorang bapak-bapak dari fakfak.");
+  if (!coroutine1) {
+    fprintf(stderr, "Failed to spawn coroutine\n");
+    return 1;
+  }
+  co_t *coroutine2 = co_spawn(second_fn, "Makefile");
+  if (!coroutine2) {
+    fprintf(stderr, "Failed to spawn coroutine\n");
+    return 1;
+  }
 
-  puts("[main] starting coroutine");
-  yield(&main_ctx, &coro_ctx);
+  co_join(coroutine1);
+  co_join(coroutine2);
 
   puts("[main] back from coroutine");
   puts("[main] done");
