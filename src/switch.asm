@@ -28,6 +28,8 @@ ctx_switch:
     
     mov   rdi, rsi       ; set rdi to point to the target context for trampoline
     jmp rax
+.ctx_exit:
+    ret
 
 ; this function below expect the rdi register to point to a context structure
 context_trampoline:
@@ -39,16 +41,15 @@ context_trampoline:
     
     mov rdi, r11        ; move the first argument into rdi
     call r10 ; call the function
-    
-    ; After function returns, switch back to return context or exit
+    mov byte [r13 + 88], 1
+
     test r12, r12
     je .exit ; if return_ctx is NULL, exit
 
     mov rsi, r12        ; set rsi to return_ctx
-    mov rdi, r13        ; from is current context (already in rdi)
     call ctx_switch     ; switch back to return context
 .exit:
     ; Exit cleanly if no return context
     mov rax, 60         ; sys_exit system call
-    mov rdi, 0          ; exit status 0
+    mov rdi, 1          ; exit status 0
     syscall
